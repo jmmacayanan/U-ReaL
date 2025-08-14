@@ -25,12 +25,21 @@ test_urls = [
     "https://www.geeksforgeeks.org/",
     "https://docs.google.com/document/d/1R-tJAzhftiZeIcn-mMwCbIOOxkjupdfDFvP_dLG1u1g/edit?tab=t.0#heading=h.3718mz9rw9am",
     "https://housitba5.firebaseapp.com/",
-    "http://slatteryauctions.com.au"
-]
+    "http://slatteryauctions.com.au",
+    "https://www.amazon.com/",
+    "https://www.facebook.com/",
+    "https://fribbels.github.io/hsr-optimizer#showcase?id=802748532",
+    "https://www.paypal.com/ph/home"
+    
+    ]
 
+# -----------------------------
+# Feature order must match training
+# -----------------------------
 FEATURE_ORDER = [
     'url_len', 'dot_count', 'hyphen_count', 'has_ip',
-    'suspicious_words', 'subdomain_count', 'tld_length',
+    'suspicious_total',  # updated name
+    'subdomain_count', 'tld_length',
     'url_entropy', 'has_a', 'has_mx', 'has_ns', 'ip_count'
 ]
 
@@ -43,6 +52,7 @@ for url in test_urls:
         print(f"{url} → ❌ Feature extraction failed")
         continue
 
+    # Check all features exist
     if not all(f in feat_dict for f in FEATURE_ORDER):
         print(f"{url} → ❌ Missing features")
         continue

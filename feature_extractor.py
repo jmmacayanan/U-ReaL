@@ -4,9 +4,14 @@ from urllib.parse import urlparse
 import dns.resolver
 import dns.exception
 
-
 class URLFeatureExtractor:
     dns_cache = {}
+
+    SUSPICIOUS_KEYWORDS = [
+        'login', 'secure', 'update', 'free', 'verify', 'account', 'gift', 'bank',
+        'confirm', 'password', 'signin', 'click', 'bonus', 'reward', 'offer', 'urgent',
+        'win', 'prize', 'limited', 'billing', 'invoice', 'checkout'
+    ]
 
     def __init__(self, url):
         self.url = url
@@ -30,17 +35,26 @@ class URLFeatureExtractor:
         return entropy
 
     def count_suspicious_words(self):
-        keywords = ['login', 'secure', 'update', 'free', 'verify', 'account', 'gift', 'bank']
-        return sum(self.url.lower().count(word) for word in keywords)
+        # Give higher weight to suspicious keywords
+        weight = 2
+        count = sum(self.url.lower().count(word) for word in self.SUSPICIOUS_KEYWORDS)
+        return count * weight
 
     def extract_domain(self):
         try:
-            return urlparse(self.url).netloc
+            netloc = urlparse(self.url).netloc.lower()
+            # Remove port if present
+            netloc = netloc.split(':')[0]
+            # Remove 'www.' prefix if it exists
+            if netloc.startswith('www.'):
+                netloc = netloc[4:]
+            return netloc
         except:
             return ''
 
     def subdomain_count(self):
         parts = self.domain.split('.')
+        # Ignore main domain + TLD
         return max(len(parts) - 2, 0)
 
     def tld_length(self):
@@ -86,7 +100,7 @@ class URLFeatureExtractor:
                 'dot_count': self.count_dots(),
                 'hyphen_count': self.count_hyphens(),
                 'has_ip': self.has_ip(),
-                'suspicious_words': self.count_suspicious_words(),
+                'suspicious_total': self.count_suspicious_words(),  # renamed for consistency
                 'subdomain_count': self.subdomain_count(),
                 'tld_length': self.tld_length(),
                 'url_entropy': self.url_entropy(),
