@@ -1,5 +1,3 @@
-# main.py
-
 import pandas as pd
 import xgboost as xgb
 from feature_extractor import URLFeatureExtractor
@@ -9,6 +7,11 @@ from feature_extractor import URLFeatureExtractor
 # -----------------------------
 model = xgb.XGBClassifier()
 model.load_model("url_xgb_model.json")
+
+# -----------------------------
+# Load Whitelist
+# -----------------------------
+URLFeatureExtractor.load_whitelist("raw_datasets/benign-urls.csv")
 
 # -----------------------------
 # Test URLs
@@ -29,16 +32,21 @@ test_urls = [
     "https://www.amazon.com/",
     "https://www.facebook.com/",
     "https://fribbels.github.io/hsr-optimizer#showcase?id=802748532",
-    "https://www.paypal.com/ph/home"
-    
-    ]
+    "https://www.paypal.com/ph/home",
+    "https://bit.ly/3xyzAbC",
+    "https://tinyurl.com/abcd123",
+    "https://dappssolver.pages.dev/app/",
+    "http://allegro.pl-oferta20382047420.icu",
+    "https://www.youtube.com/watch?v=yu9lEPDVn1A",
+    "https://www.youtube.com/"
+]
 
 # -----------------------------
 # Feature order must match training
 # -----------------------------
 FEATURE_ORDER = [
     'url_len', 'dot_count', 'hyphen_count', 'has_ip',
-    'suspicious_total',  # updated name
+    'suspicious_total',
     'subdomain_count', 'tld_length',
     'url_entropy', 'has_a', 'has_mx', 'has_ns', 'ip_count'
 ]
@@ -46,23 +54,22 @@ FEATURE_ORDER = [
 print("\n🔎 Predictions:")
 for url in test_urls:
     extractor = URLFeatureExtractor(url)
-    feat_dict = extractor.extract_features()
 
+    # ✅ If whitelisted, skip prediction and label as benign
+    if extractor.is_whitelisted():
+        print(f"{url} → 🟢 Benign (whitelisted)")
+        continue
+
+    feat_dict = extractor.extract_features()
     if feat_dict is None:
         print(f"{url} → ❌ Feature extraction failed")
         continue
 
-    # Check all features exist
-    if not all(f in feat_dict for f in FEATURE_ORDER):
-        print(f"{url} → ❌ Missing features")
-        continue
-
     df = pd.DataFrame([[feat_dict[f] for f in FEATURE_ORDER]], columns=FEATURE_ORDER)
-
     if df.isnull().any().any():
         print(f"{url} → ❌ Found NaNs in features")
         continue
 
     proba = model.predict_proba(df)[0][1]
-    label = "🔴 Malicious" if proba >= 0.5 else "🟢 Benign"
+    label = "🔴 Malicious" if proba >= 0.4 else "🟢 Benign"
     print(f"{url} → {label} ({proba * 100:.2f}% confidence)")

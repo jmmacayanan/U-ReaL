@@ -6,8 +6,8 @@ if __name__ == '__main__':
     import concurrent.futures
     from tqdm import tqdm
     from feature_extractor import URLFeatureExtractor
-    import matplotlib.pyplot as plt
 
+    # -------- Feature extraction helper --------
     def safe_extract_features(index_url):
         i, url = index_url
         extractor = URLFeatureExtractor(url)
@@ -16,13 +16,16 @@ if __name__ == '__main__':
             return None
         return i, features
 
-    # Load dataset (sample 3000 for speed)
-    df = pd.read_csv("url_dataset_balanced.csv").sample(n=3000, random_state=42).reset_index(drop=True)
-    print("Label distribution:\n", df['label'].value_counts())
+    # -------- Load balanced dataset (1500 each class) --------
+    df_full = pd.read_csv("url_dataset_balanced.csv")
+    df_benign = df_full[df_full['label'] == 0].sample(n=7500, random_state=42)
+    df_malicious = df_full[df_full['label'] == 1].sample(n=7500, random_state=42)
+    df = pd.concat([df_benign, df_malicious]).reset_index(drop=True)
+    print("Label distribution (balanced):\n", df['label'].value_counts())
 
-    # Extract features concurrently
+    # -------- Extract features concurrently --------
     print("⚙️ Extracting features...")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         results = list(tqdm(executor.map(safe_extract_features, enumerate(df['url'])), total=len(df)))
 
     valid_results = [res for res in results if res is not None]
@@ -33,7 +36,7 @@ if __name__ == '__main__':
     features_df = pd.DataFrame(feature_rows)
     labels = df.loc[list(indices), 'label'].reset_index(drop=True)
 
-    # Stratified split to maintain class balance
+    # -------- Stratified split --------
     X_train, X_temp, y_train, y_temp = train_test_split(
         features_df, labels, test_size=0.4, random_state=42, stratify=labels
     )
@@ -41,7 +44,7 @@ if __name__ == '__main__':
         X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp
     )
 
-    # Initialize XGBoost model with tuned hyperparameters
+    # -------- Initialize XGBoost model (fast training) --------
     model = xgb.XGBClassifier(
         n_estimators=500,
         max_depth=6,
@@ -53,7 +56,9 @@ if __name__ == '__main__':
         reg_lambda=1,
         eval_metric='logloss',
         use_label_encoder=False,
-        verbosity=1
+        verbosity=1,
+        tree_method='hist',  # faster histogram-based training
+        n_jobs=8             # parallel threads
     )
 
     print("🚀 Training model...")
@@ -63,16 +68,11 @@ if __name__ == '__main__':
         verbose=True
     )
 
-    # Evaluate
+    # -------- Evaluate --------
     y_pred = model.predict(X_test)
     print("\n✅ Accuracy:", accuracy_score(y_test, y_pred))
     print(classification_report(y_test, y_pred))
 
-    # Save model
+    # -------- Save model --------
     model.save_model("url_xgb_model.json")
     print("✅ Model saved as url_xgb_model.json")
-
-    # Plot feature importance
-    xgb.plot_importance(model, importance_type='weight', max_num_features=15)
-    plt.title("Top 15 Feature Importances")
-    plt.show()
